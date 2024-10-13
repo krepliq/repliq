@@ -1,10 +1,18 @@
 [package]
-name = "repliq-replication"
-version = "0.1.0"
+name = "repliq-k8s"
+version = "0.1.0" # Remember to update this as you release new versions
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "repliq_k8s"
+path = "src/lib.rs"
 
 [dependencies]
 repliq-core = { path = "../repliq-core" }
-repliq-ipc = { path = "../repliq-ipc" }
+
+[dev-dependencies]
+criterion = "0.5.1" # For benchmarking
+rand = "0.8" # For generating random test data
+tempfile = "3.3" # For creating temporary files during tests
+tokio = { version = "1", features = ["full"] } # For asynchronous testing
+k8s-openapi = "0.17" # Or your preferred Kubernetes API crate

@@ -1,16 +1,14 @@
 [package]
-name = "repliq-client"
+name = "repliq-replicate"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "repliq_client"
+name = "repliq_replicate"
 path = "src/lib.rs"
 
 [dependencies]
 repliq-core = { path = "../repliq-core" }
-repliq-ipc = { path = "../repliq-ipc" }
-repliq-replicate = { path = "../repliq-replicate" }
 
 [dev-dependencies]
 criterion = "0.5.1" # For benchmarking

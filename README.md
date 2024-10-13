@@ -5,7 +5,7 @@ message queue
 written in Rust for deterministic, low-latency inter-process communication (IPC) and cross-machine replication. Inspired
 by [Chronicle Queue](https://chronicle.software/queue/).
 
-![Repliq Dashboard](./images/repliq_640_320.png)
+![Repliq Dashboard](images/readme/repliq_640_320.png)
 
 ## Key Features
 
@@ -262,7 +262,7 @@ spec:
 
 ## Dashboard
 
-![Repliq Dashboard](./images/repliq_dashboard.png)
+![Repliq Dashboard](images/readme/repliq_dashboard.png)
 
 ## Integrations
 
