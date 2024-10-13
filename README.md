@@ -5,7 +5,7 @@ low-latency inter-process communication (IPC) and cross-machine replication.
 
 Inspired by [Chronicle Queue](https://chronicle.software/queue/).
 
-![repliq](./images/readme/repliq_640_320.png)
+![repliq](docs/readme/images/repliq_640_320.png)
 
 ## Key Features
 
@@ -259,7 +259,7 @@ spec:
 
 ## Grafana Dashboard
 
-![repliq Dashboard](images/readme/repliq_dashboard.png)
+![repliq Dashboard](docs/readme/images/repliq_dashboard.png)
 
 ## Integrations
 
@@ -282,7 +282,7 @@ For detailed integration guides and examples, please refer to our [documentation
 
 ## Benchmarks
 
-![repliq Benchmarks](images/readme/repliq_off_the_charts.png)
+![repliq Benchmarks](docs/readme/images/repliq_off_the_charts.png)
 
 ## License
 
