@@ -1,0 +1,18 @@
+[package]
+name = "repliq-client"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+
+[dependencies]
+repliq-core = { path = "../repliq-core" }
+
+[dependencies]
+repliq-ipc = { path = "../repliq-ipc" }
+
+[dependencies]
+repliq-replication = { path = "../repliq-replication" }
+
+[dependencies]
+repliq-k8s = { path = "../repliq-k8s" }
