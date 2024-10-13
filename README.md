@@ -1,22 +1,22 @@
-# repliq
+# k8s-repli-queue
 
-Repliq (pronounced rep-li-kew) is an open-source, Kubernetes-native, high-performance, persistent, and replicated
-message queue
-written in Rust for deterministic, low-latency inter-process communication (IPC) and cross-machine replication. Inspired
-by [Chronicle Queue](https://chronicle.software/queue/).
+**k8s-repli-queue** is a copyleft, open-source, Kubernetes-native message queue written in Rust for deterministic,
+low-latency inter-process communication (IPC) and cross-machine replication.
 
-![Repliq Dashboard](images/readme/repliq_640_320.png)
+Inspired by [Chronicle Queue](https://chronicle.software/queue/).
+
+![repliq](./images/readme/repliq_640_320.png)
 
 ## Key Features
 
-* **Memory-mapped files:**  Provides ultra-fast data access and efficient sharing between processes.
-* **Asynchronous replication:** Enables scalable, cross-machine communication with low latency.
-* **Familiar Rust queue interface:** Offers an intuitive API for easy integration.
-* **Kubernetes-native:** Leverages Kubernetes features for seamless deployment and management.
+- **Asynchronous replication:** Enables scalable, cross-machine communication with low latency.
+- **Memory-mapped files:** Provides ultra-fast data access and efficient sharing between processes.
+- **Familiar Queue interface:** Offers an intuitive API for easy integration.
+- **Kubernetes-native:** Leverages Kubernetes features for seamless deployment and management.
 
 ## Coming Soon
 
-**Target Release: Q1 2025**
+**Target Release: 2025 Q1**
 
 Stay tuned for updates and the initial release.
 
@@ -24,8 +24,8 @@ Stay tuned for updates and the initial release.
 
 ```rust
 use async_trait::async_trait;
-use thiserror::Error;
 use std::io;
+use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum QueueError {
@@ -54,17 +54,19 @@ pub enum QueueError {
     Other(String),
 }
 
-// Trait representing a generic queue
+pub enum ReplicationMode {
+    Synchronous,
+    Asynchronous,
+}
+
 #[async_trait]
 pub trait Queue<T: Send + Sync> {
     async fn enqueue(&self, item: T) -> Result<(), QueueError>;
     async fn dequeue(&self) -> Result<Option<T>, QueueError>;
 }
 
-// Trait for a persistent queue (extends the basic Queue trait)
 #[async_trait]
 pub trait PersistentQueue<T: Send + Sync>: Queue<T> {
-    // Create a new persistent queue, specifying the file path and capacity.
     fn new(path: &str, capacity: usize) -> Result<Self, QueueError>
     where
         Self: Sized;
@@ -75,12 +77,9 @@ pub trait PersistentQueue<T: Send + Sync>: Queue<T> {
         Self: Sized;
 }
 
-// Trait for a replicated queue (extends PersistentQueue)
 #[async_trait]
 pub trait ReplicatedQueue<T: Send + Sync>: PersistentQueue<T> {
-    // Configure replication settings, specifying the primary node, 
-    // a list of secondary nodes, and the replication mode.
-    fn with_replication(
+    fn configure_replication(
         &mut self,
         primary_node: &str,
         secondary_nodes: Vec<&str>,
@@ -88,17 +87,10 @@ pub trait ReplicatedQueue<T: Send + Sync>: PersistentQueue<T> {
     ) -> Result<(), QueueError>;
 }
 
-// Enum for replication modes (synchronous or asynchronous).
-pub enum ReplicationMode {
-    Synchronous,
-    Asynchronous,
-}
-
-// Implement a concrete ReplicatedQueue for ease of use
-pub struct RepliqQueue<T: Send + Sync>(std::marker::PhantomData<T>);
+pub struct ReplicatedQueueImpl<T: Send + Sync>(std::marker::PhantomData<T>);
 
 #[async_trait]
-impl<T: Send + Sync> Queue<T> for RepliqQueue<T> {
+impl<T: Send + Sync> Queue<T> for ReplicatedQueueImpl<T> {
     async fn enqueue(&self, item: T) -> Result<(), QueueError> {
         // Implementation details...
         Ok(())
@@ -110,20 +102,20 @@ impl<T: Send + Sync> Queue<T> for RepliqQueue<T> {
     }
 }
 
-impl<T: Send + Sync> PersistentQueue<T> for RepliqQueue<T> {
+impl<T: Send + Sync> PersistentQueue<T> for ReplicatedQueueImpl<T> {
     fn new(path: &str, capacity: usize) -> Result<Self, QueueError> {
         // Implementation details...
-        Ok(RepliqQueue(std::marker::PhantomData))
+        Ok(ReplicatedQueueImpl(std::marker::PhantomData))
     }
 
     fn open(path: &str) -> Result<Self, QueueError> {
         // Implementation details...
-        Ok(RepliqQueue(std::marker::PhantomData))
+        Ok(ReplicatedQueueImpl(std::marker::PhantomData))
     }
 }
 
-impl<T: Send + Sync> ReplicatedQueue<T> for RepliqQueue<T> {
-    fn with_replication(
+impl<T: Send + Sync> ReplicatedQueue<T> for ReplicatedQueueImpl<T> {
+    fn configure_replication(
         &mut self,
         primary_node: &str,
         secondary_nodes: Vec<&str>,
@@ -138,36 +130,41 @@ impl<T: Send + Sync> ReplicatedQueue<T> for RepliqQueue<T> {
 ## Sample Usage
 
 ```rust
-use repliq::{QueueError, ReplicatedQueue, ReplicationMode, RepliqQueue};
+use repliq::{ReplicatedQueue, ReplicationMode};
+use std::process::{Command, Stdio};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create a new replicated queue
-    let mut queue = RepliqQueue::<String>::new("my_queue", 1024)?;
-
-    // Configure replication
-    queue.with_replication(
-        "primary-node",
-        vec!["secondary-node-1", "secondary-node-2"],
+    // In the parent process, create a new replicated queue
+    let mut parent_queue: impl ReplicatedQueue<String> = ReplicatedQueueImpl::new(
+        "my_queue",
+        1024,
+        "localhost:31337", // Use localhost for this example
+        vec![],            // No secondary nodes in this simple example
         ReplicationMode::Asynchronous,
     )?;
 
-    // Enqueue an item
-    queue.enqueue("Hello, repliq!".to_string()).await?;
+    // Enqueue an item in the parent process
+    parent_queue.enqueue("Hello from parent!".to_string()).await?;
 
-    // Dequeue an item
-    match queue.dequeue().await? {
-        Some(message) => println!("Dequeued item: {}", message),
-        None => println!("Queue is empty!"),
+    // In the child process (simulated here), connect to the existing queue by name
+    let mut child_queue: impl ReplicatedQueue<String> = ReplicatedQueue::open("my_queue")?;
+
+    // Dequeue the item in the child process
+    let item = child_queue.dequeue().await?;
+    if let Some(message) = item {
+        // Send the dequeued message back to the parent process via stdout
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin.write_all(format!("{}\n", message).as_bytes()).await?;
+        }
     }
 
-    // Demonstrate error handling
-    if let Err(e) = queue.enqueue("This might fail".to_string()).await {
-        match e {
-            QueueError::Full => eprintln!("Failed to enqueue: Queue is full"),
-            QueueError::Io(io_error) => eprintln!("I/O error during enqueue: {}", io_error),
-            QueueError::Replication(msg) => eprintln!("Replication error during enqueue: {}", msg),
-            _ => eprintln!("Unexpected error during enqueue: {:?}", e),
+    // Read the message from the child process's stdout in the parent process
+    if let Some(stdout) = child.stdout.take() {
+        let mut reader = BufReader::new(stdout).lines();
+        while let Some(line) = reader.next_line().await? {
+            println!("Child process received: {}", line);
         }
     }
 
@@ -175,10 +172,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-## Kubernetes and Docker Hub Usage (Proposed)
+## Kubernetes Usage (Proposed)
 
-`repliq` is designed to be Kubernetes-native. You'll be able to deploy it as a Docker container within your Kubernetes
-cluster and configure it using Kubernetes resources like ConfigMaps and Secrets.
+**k8s-repli-queue** is designed to be Kubernetes-native. You'll be able to deploy it as a Docker container within your
+Kubernetes cluster and configure it using Kubernetes resources like ConfigMaps and Secrets.
 
 **Example Deployment (Conceptual):**
 
@@ -198,7 +195,7 @@ spec:
     spec:
       containers:
         - name: repliq
-          image: mahurangisoftware/repliq:latest
+          image: mahurangisoftware/k8s-repli-queue:latest
           resources:
             limits:
               memory: 200Mi
@@ -260,25 +257,35 @@ spec:
   type: ClusterIP
 ```
 
-## Dashboard
+## Grafana Dashboard
 
-![Repliq Dashboard](images/readme/repliq_dashboard.png)
+![repliq Dashboard](images/readme/repliq_dashboard.png)
 
 ## Integrations
 
-Repliq seamlessly integrates with various tools and platforms to enhance monitoring, scaling, and overall operational
-efficiency:
+**k8s-repli-queue** seamlessly integrates with various tools and platforms to enhance monitoring, scaling, and overall
+operational efficiency:
 
-* **Prometheus**: Export key metrics for comprehensive monitoring and alerting.
-* **Grafana/Telegraf**: Visualize Repliq performance data with customizable dashboards.
-* **More to follow...**
+- **Prometheus**: Export key metrics for comprehensive monitoring and alerting.
+- **Grafana/Telegraf**: Visualize repliq performance data with customizable dashboards.
+- **Redis Streams**: Leverage Redis' speed and simplicity for real-time data ingestion and processing.
+- **NATS**: Integrate with NATS for a high-performance, cloud-native messaging solution.
+- **RabbitMQ**: Connect repliq with RabbitMQ for robust message queuing and delivery guarantees.
+- **InfluxDB**: Store and analyze time-series metrics data from repliq for performance monitoring and capacity planning.
+- **Fluentd/FluentBit**: Collect and forward repliq logs to central logging systems (e.g., Elasticsearch, Splunk) for
+  analysis and monitoring.
+- **Jaeger**: Visualize message flow and trace message journeys through repliq queues and across replicas.
+- **Kafka**: Seamlessly connect repliq with Kafka to leverage its distributed streaming capabilities.
+- **Slack**: Share high-frequency tick data with your colleagues.
 
-For detailed integration guides, please refer to our [documentation](https://docs.repliq.io/integrations).
+For detailed integration guides and examples, please refer to our [documentation](https://docs.repliq.io/integrations).
 
 ## Benchmarks
 
-...
+![repliq Benchmarks](images/readme/repliq_off_the_charts.png)
 
 ## License
 
 This project is licensed under the [GNU General Public License](LICENSE).
+
+---
